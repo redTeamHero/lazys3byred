@@ -75,17 +75,17 @@ class S3
   def execute_aws_command(command)
     stdout, stderr, status = Open3.capture3(command)
     if status.success?
-      $logger.info("AWS CLI command successful: #{command}")
-      $logger.info(stdout) unless stdout.empty?
+      $logger.info("AWS CLI command successful: #{command}") if $verbose
+      $logger.info(stdout) unless stdout.empty? || !$verbose
     else
       $logger.error("AWS CLI command failed: #{command}")
-      $logger.error(stderr) unless stderr.empty?
+      $logger.error(stderr) unless stderr.empty? || !$verbose
     end
   end
 end
 
 class Scanner
-  def initialize(list, show_codes, timeout, threads, logger, rate_limit, actions)
+  def initialize(list, show_codes, timeout, threads, logger, rate_limit, actions, verbose)
     @list = list
     @show_codes = show_codes
     @timeout = timeout
@@ -95,6 +95,7 @@ class Scanner
     @results_mutex = Mutex.new
     @rate_limit = rate_limit
     @actions = actions
+    @verbose = verbose
     @last_request_time = Time.now
   end
 
@@ -121,7 +122,7 @@ class Scanner
     workers.each(&:join)
 
     # Debugging line to check if results are collected
-    $logger.info("Scan completed with #{@results.length} results")
+    $logger.info("Scan completed with #{@results.length} results") if @verbose
   end
 
   def results
@@ -225,6 +226,10 @@ OptionParser.new do |opts|
     options[:actions] = actions
   end
 
+  opts.on("-v", "--verbose", "Enable verbose output") do
+    $verbose = true
+  end
+
   opts.on("-h", "--help", "Prints this help") do
     puts opts
     exit
@@ -246,7 +251,7 @@ wordlist = Wordlist.from_file(ARGV[0], options[:file])
 
 $logger.info("Generated wordlist from file, #{wordlist.length} items...")
 
-scanner = Scanner.new(wordlist, options[:codes] || [], options[:timeout], options[:threads], $logger, options[:rate], options[:actions])
+scanner = Scanner.new(wordlist, options[:codes] || [], options[:timeout], options[:threads], $logger, options[:rate], options[:actions], $verbose)
 scanner.scan
 
 if options[:output]
@@ -263,4 +268,3 @@ if options[:output]
 else
   $logger.info("No output file specified. Results will not be saved.")
 end
-
